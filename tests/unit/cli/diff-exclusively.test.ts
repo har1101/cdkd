@@ -93,6 +93,8 @@ function makeStack(stackName: string, dependencyNames: string[] = [], stagePath?
 
 /** The stack names the run diffed (handed to macro expansion), in order. */
 function diffedStacks(): string[] {
+  // The run reached the diff loop: nothing failed after selection.
+  expect(mockLoggerError).not.toHaveBeenCalled();
   expect(mockExpandMacros).toHaveBeenCalledTimes(1);
   const [stacks] = mockExpandMacros.mock.calls[0] as unknown as [{ stackName: string }[]];
   return stacks.map((s) => s.stackName);
@@ -160,10 +162,15 @@ describe('cdkd diff --exclusively', () => {
 // As `cdkd deploy --all`: a top-level stack's dependency inside a CDK Stage is
 // included, and only the Stage stacks still left out are reported.
 describe('cdkd diff --all and a dependency inside a CDK Stage', () => {
-  const staged = [makeStack('Top', ['Prod-Db']), makeStack('Prod-Db', [], 'Prod'), makeStack('Prod-Api', [], 'Prod')];
+  const staged = [
+    makeStack('Top', ['Prod-Db']),
+    makeStack('Prod-Db', [], 'Prod'),
+    makeStack('Prod-Api', [], 'Prod'),
+  ];
 
   beforeEach(() => {
     mockSynthesize.mockReset();
+    mockLoggerError.mockReset();
     mockLoggerInfo.mockReset();
     mockExpandMacros.mockClear();
     mockSynthesize.mockResolvedValue({ stacks: staged, manifest: {}, assemblyDir: '/tmp/cdk.out' });
@@ -197,5 +204,6 @@ describe('-e / --exclusively is one option shared by deploy and diff', () => {
     expect(diffOpt?.defaultValue).toBe(false);
     expect(deployOpt?.defaultValue).toBe(false);
     expect(diffOpt?.description).toBe("Only diff requested stacks, don't include dependencies");
+    expect(deployOpt?.description).toBe("Only deploy requested stacks, don't include dependencies");
   });
 });

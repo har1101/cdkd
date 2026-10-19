@@ -375,7 +375,7 @@ async function diffCommand(
       );
     }
     const diffedNames = new Set(targetStacks.map((s) => s.stackName));
-    const leftOut = allLeftOutStageStacks;
+    const leftOut = allLeftOutStageStacks.filter((s) => !diffedNames.has(s.stackName));
     if (leftOut.length > 0) logger.info(renderAllLeftOutStageStacks(leftOut));
 
     // Issue #1150: macro expansion was deferred at synthesize() time —
@@ -592,8 +592,9 @@ async function diffCommand(
           ...(stackInfo.account && { consumerAccount: stackInfo.account }),
           previewOrphanAdoption,
           attributeHealerFor,
-          // This IS the stack the user named, so it is the one node that
-          // carries the repaired-container refusals (go-to-k/cdkd#3335).
+          // A top-level stack (selected, or an added dependency stack), so it
+          // is a node that carries the repaired-container refusals
+          // (go-to-k/cdkd#3335).
           isNestedChild: false,
           refusalRecovery,
         })

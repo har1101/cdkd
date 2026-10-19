@@ -898,6 +898,20 @@ describe('deploy --all selects top-level stacks only (issue #4474)', () => {
     expect(info()).not.toContain('--all selects top-level stacks only');
   });
 
+  it('deploys the stacks a requested stack depends on, and only it under -e', async () => {
+    synthStacks.value = [
+      makeStack('Producer'),
+      makeStack('Consumer', { dependencyNames: ['Producer'] }),
+    ];
+
+    expect(await runDeploy(['Consumer', '--yes'])).toBeUndefined();
+    expect(vi.mocked(DeployEngine)).toHaveBeenCalledTimes(2);
+
+    vi.mocked(DeployEngine).mockClear();
+    expect(await runDeploy(['Consumer', '-e', '--yes'])).toBeUndefined();
+    expect(vi.mocked(DeployEngine)).toHaveBeenCalledTimes(1);
+  });
+
   it('prints no hint when the app has no Stage stacks', async () => {
     synthStacks.value = [makeStack('TopStack')];
 

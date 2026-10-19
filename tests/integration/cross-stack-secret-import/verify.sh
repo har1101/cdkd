@@ -810,7 +810,7 @@ if ! printf '%s' "${DEPLOY2_OUT}" | grep -q "No changes detected"; then
   # UPDATE, an empty one means only this grep went blind.
   if printf '%s' "${DEPLOY2_OUT}" | grep -q "${CONSUMER}"; then
     diag "${DEPLOY2_OUT}"
-    fail "the second consumer deploy did not report 'No changes detected' - either the consumer re-UPDATEd (perpetual UPDATE) or cdkd's no-change wording drifted and this grep is now blind; 'cdkd diff ${CONSUMER} --json' separates the two"
+    fail "the second consumer deploy did not report 'No changes detected' - either the consumer re-UPDATEd (perpetual UPDATE) or cdkd's no-change wording drifted and this grep is now blind; 'cdkd diff ${CONSUMER} -e --json' separates the two"
   fi
   fail "the second consumer deploy printed neither 'No changes detected' nor the stack name - the output was not captured at all"
 fi

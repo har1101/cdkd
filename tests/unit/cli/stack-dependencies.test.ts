@@ -95,6 +95,13 @@ describe('includeDependencyStacks', () => {
     expect(names(includeDependencyStacks([consumer], [consumer]))).toEqual(['Consumer']);
   });
 
+  it('terminates on a dependency cycle, adding each stack once', () => {
+    const a = stack('A', ['B']);
+    const b = stack('B', ['A']);
+
+    expect(names(includeDependencyStacks([a], [a, b]))).toEqual(['A', 'B']);
+  });
+
   it('reports every added stack with the stack that required it', () => {
     const producer = stack('Producer');
     const middle = stack('Middle', ['Producer']);
