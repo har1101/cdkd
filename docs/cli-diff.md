@@ -13,8 +13,11 @@ so it is safe to run at any time.
 # the single stack in the app
 cdkd diff
 
-# one stack by name
+# one stack by name, plus the stacks it depends on
 cdkd diff MyStack
+
+# only that stack, without its dependencies
+cdkd diff MyStack -e
 
 # every stack under a stage
 cdkd diff 'MyStage/*'
@@ -246,6 +249,7 @@ The full rules are in
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--all` | off | Diff every top-level stack in the app. Use `'**'` to include Stage stacks. |
+| `-e`, `--exclusively` | off | Diff only the requested stacks, without the stacks they depend on. See [Dependency stacks](#dependency-stacks). |
 | `--stack <name>` | — | A single stack name, as an alternative to the positional argument. |
 | `--output <path>` | `cdk.out` | Synthesis output directory. |
 | `--recursive` | off | Diff every nested stack against its own state. See [`--recursive`](#recursive-nested-stacks). |
@@ -290,6 +294,34 @@ and lists the stacks the app contains. A CDK Stage that fails to load stops
 the diff whatever was selected; see
 [the failed-Stage note](cli-deploy-safety-assembly-checks.md#a-pre-synthesized-assembly-is-trusted-input).
 More detail is under [stack selection](cli-list.md#selecting-stacks).
+
+### Dependency stacks
+
+Diff also compares the stacks the selected stacks depend on, as
+`cdkd deploy` deploys them. So `cdkd diff MyStack` previews everything that
+`cdkd deploy MyStack` would change. `-e` / `--exclusively` diffs only the
+requested stacks, and matches `cdkd deploy -e`. Both follow the AWS CDK CLI's
+`cdk diff` / `cdk diff -e`.
+
+```bash
+# Consumer depends on Middle, which depends on Producer
+cdkd diff Consumer      # diffs Consumer, Middle and Producer
+cdkd diff Consumer -e   # diffs Consumer only
+```
+
+A stack depends on another when the CDK app adds a dependency between them
+(`addDependency`, or a cross-stack reference CDK turns into one), or when its
+template imports one of the other stack's exports with `Fn::ImportValue`. A
+`Fn::GetStackOutput` read does not make a dependency, so its producer is not
+added. cdkd logs each stack it adds:
+
+```text
+Including dependency stack: Middle (required by Consumer)
+```
+
+The added stacks count for `--fail` / `--fail-on` and appear in `--json` like
+the requested ones. With `--all`, a Stage stack that a top-level stack depends
+on is diffed too, and is not reported as left out.
 
 ## `--fail-on`
 

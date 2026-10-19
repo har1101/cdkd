@@ -11,6 +11,7 @@ import {
   parseContextOptions,
   useCdkBootstrapAssetsOption,
   noCfnFallbackOption,
+  exclusivelyOption,
   warnIfDeprecatedRegion,
 } from '../options.js';
 import { getLogger } from '../../utils/logger.js';
@@ -51,6 +52,7 @@ import {
   renderAllNoTopLevelStacks,
   renderNoStackMatch,
 } from '../stack-matcher.js';
+import { includeDependencyStacks } from '../stack-dependencies.js';
 import {
   loadProviderClasses,
   registerAllProviders,
@@ -211,6 +213,7 @@ async function diffCommand(
     statePrefix: string;
     stack?: string;
     all?: boolean;
+    exclusively?: boolean;
     recursive?: boolean;
     fail?: boolean;
     failOn?: DiffFailOn;
@@ -329,6 +332,9 @@ async function diffCommand(
     // Determine target stacks: positional args > --stack > --all > auto (single stack)
     const stackPatterns = stacks.length > 0 ? stacks : options.stack ? [options.stack] : [];
     let targetStacks;
+    // Stage stacks `--all` left out, reported once dependency inclusion below
+    // has run: a top-level stack's dependency inside a Stage is still diffed.
+    let allLeftOutStageStacks: typeof allStacks = [];
 
     if (allStacks.length === 0) {
       // Reached before the branch chain below: with zero stacks and no
@@ -343,7 +349,7 @@ async function diffCommand(
       // source scanners), and the run says it left them out.
       const { topLevel, inStages } = partitionTopLevel(allStacks);
       if (topLevel.length === 0) throw new Error(renderAllNoTopLevelStacks(inStages));
-      if (inStages.length > 0) logger.info(renderAllLeftOutStageStacks(inStages));
+      allLeftOutStageStacks = inStages;
       targetStacks = topLevel;
     } else if (stackPatterns.length > 0) {
       targetStacks = matchStacks(allStacks, stackPatterns);
@@ -359,6 +365,18 @@ async function diffCommand(
     if (targetStacks.length === 0) {
       throw new Error(renderNoStackMatch(stackPatterns, allStacks));
     }
+
+    // Diff the same stacks `cdkd deploy` would deploy (AWS CDK CLI `cdk diff`
+    // parity): the requested stacks plus the stacks they depend on, unless
+    // -e / --exclusively asks for the requested stacks only.
+    if (!options.exclusively) {
+      targetStacks = includeDependencyStacks(targetStacks, allStacks, (dep, requiredBy) =>
+        logger.info(safeMsg`Including dependency stack: ${dep} (required by ${requiredBy})`)
+      );
+    }
+    const diffedNames = new Set(targetStacks.map((s) => s.stackName));
+    const leftOut = allLeftOutStageStacks;
+    if (leftOut.length > 0) logger.info(renderAllLeftOutStageStacks(leftOut));
 
     // Issue #1150: macro expansion was deferred at synthesize() time —
     // expand now for exactly the stacks being diffed, mutating each
@@ -743,6 +761,7 @@ export function createDiffCommand(): Command {
       'Output the diff as JSON (nested tree shape when combined with --recursive)',
       false
     )
+    .addOption(exclusivelyOption('diff'))
     .addOption(useCdkBootstrapAssetsOption)
     .addOption(noCfnFallbackOption)
     .action(withErrorHandling(diffCommand));

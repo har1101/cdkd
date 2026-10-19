@@ -44,7 +44,9 @@ app synthesizes), and wildcards work (`cdkd deploy 'My*'`). Both forms are
 accepted, CDK-CLI parity: a pattern containing `/` matches the hierarchical
 DISPLAY PATH, one without matches the PHYSICAL name — so `'MyStage/*'` works.
 For `destroy`, display-path matching needs synth to succeed, because state alone
-carries physical names. Implemented in `src/cli/stack-matcher.ts`.
+carries physical names. Implemented in `src/cli/stack-matcher.ts`. `deploy`
+and `diff` then add the selected stacks' dependency stacks unless `-e` /
+`--exclusively` (`src/cli/stack-dependencies.ts`).
 
 ## stdout is a PAYLOAD on some commands
 

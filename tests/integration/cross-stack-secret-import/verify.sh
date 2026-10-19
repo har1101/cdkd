@@ -816,8 +816,10 @@ if ! printf '%s' "${DEPLOY2_OUT}" | grep -q "No changes detected"; then
 fi
 pass "the second consumer deploy reported no change"
 
+# `-e`: the consumer alone. Without it `cdkd diff` also diffs the producer the
+# consumer depends on, and this step asserts on the consumer only.
 set +e
-DIFF_OUT=$(node "${LOCAL_DIST}" diff "${CONSUMER}" --fail \
+DIFF_OUT=$(node "${LOCAL_DIST}" diff "${CONSUMER}" -e --fail \
   --state-bucket "${STATE_BUCKET}" --region "${REGION}" 2>&1)
 DIFF_RC=$?
 set -e
@@ -829,7 +831,7 @@ fi
 pass "'cdkd diff --fail' exits 0 on the unchanged consumer"
 
 set +e
-DIFF_JSON=$(node "${LOCAL_DIST}" diff "${CONSUMER}" --json \
+DIFF_JSON=$(node "${LOCAL_DIST}" diff "${CONSUMER}" -e --json \
   --state-bucket "${STATE_BUCKET}" --region "${REGION}" 2>/dev/null)
 DIFF_JSON_RC=$?
 set -e

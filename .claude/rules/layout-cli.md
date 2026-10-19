@@ -74,6 +74,11 @@ Index of every area: [code-layout.md](code-layout.md).
   two distinct manifest entries can emit one identical record — a `jq` select on
   `name` can return two accounts for what reads as one stack. Selection is
   unaffected (`matchStacks` matches the RAW name).
+- **src/cli/stack-dependencies.ts** - `includeDependencyStacks`, the one
+  dependency-stack expansion `deploy` and `diff` share, so `cdkd diff X` covers
+  what `cdkd deploy X` deploys; `-e` / `--exclusively` (`exclusivelyOption`)
+  skips it on both. STRONG edges only (manifest deps + `Fn::ImportValue`): a
+  `Fn::GetStackOutput` producer is never added (#751).
 - **src/cli/region-options.ts** - shared region normalization
   ([#2065](https://github.com/go-to-k/cdkd/issues/2065)). `foldRegionOption`
   canonicalizes `--region` AND the `AWS_REGION` / `AWS_DEFAULT_REGION` env vars

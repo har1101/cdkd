@@ -1088,6 +1088,19 @@ export const replaceOption = new Option(
 ).default(false);
 
 /**
+ * `-e` / `--exclusively` for `deploy` and `diff`: select only the requested
+ * stacks, without the dependency stacks `includeDependencyStacks` would add
+ * (AWS CDK CLI parity). One definition so the two commands cannot drift; the
+ * verb only words the help text, as `cdk deploy` / `cdk diff` do.
+ */
+export function exclusivelyOption(command: 'deploy' | 'diff'): Option {
+  return new Option(
+    '-e, --exclusively',
+    `Only ${command} requested stacks, don't include dependencies`
+  ).default(false);
+}
+
+/**
  * Issue #1002 PR 2 — per-invocation legacy pin for asset destinations
  * (design §4.2). Shared by `deploy`, `diff`, `import`, and `publish-assets`
  * (every command the redirection / rewrite affects) so the CLI surface stays
@@ -1263,10 +1276,7 @@ export const deployOptions = [
   noWaitOption,
   fullWaitOption,
   aggressiveVpcParallelOption,
-  new Option(
-    '-e, --exclusively',
-    'Only deploy requested stacks, do not include dependencies'
-  ).default(false),
+  exclusivelyOption('deploy'),
   allowUnsupportedTypesOption,
   preferSdkRouteOption,
   allowUnsupportedPropertiesOption,

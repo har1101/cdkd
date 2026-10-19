@@ -70,6 +70,7 @@ import { LockManager } from '../../state/lock-manager.js';
 import { DagBuilder } from '../../analyzer/dag-builder.js';
 import { DiffCalculator } from '../../analyzer/diff-calculator.js';
 import { inferCrossStackStackDeps } from '../../analyzer/cross-stack-deps.js';
+import { includeDependencyStacks } from '../stack-dependencies.js';
 import {
   type RoleArnReference,
   producerLookupOver,
@@ -553,10 +554,10 @@ async function deployCommand(
     // would otherwise deploy the consumer concurrently with (often before)
     // the producer and fail with `export not found` / `stack not found`.
     // Inferred from the synthesized templates (the runtime S3 export index is
-    // empty on a fresh multi-stack deploy). Both the auto-include walk below
-    // and the inter-stack DAG-edge building further down use the UNION of
-    // `dependencyNames` + these inferred producers. Computed over ALL stacks
-    // so auto-include can reach a producer not yet in `targetStacks`.
+    // empty on a fresh multi-stack deploy). The inter-stack DAG-edge building
+    // further down uses the UNION of `dependencyNames` + these inferred
+    // producers; the auto-include walk uses its strong-only subset
+    // (`includeDependencyStacks`).
     // The same walk collects every `Fn::GetStackOutput` carrying a `RoleArn`
     // (most apps: none), for the cross-account pre-flight below.
     const roleArnReferences: RoleArnReference[] = [];
@@ -573,55 +574,17 @@ async function deployCommand(
       return union;
     };
 
-    // STRONG-only edges (CDK manifest deps + `Fn::ImportValue`) for the
-    // auto-include-dependency walk below. `Fn::GetStackOutput` is a WEAK
-    // reference (it reads the producer's output opportunistically from cdkd
-    // state) and must NOT pull an unselected producer into the deploy:
-    // `cdkd deploy <consumer>` should deploy only the consumer, not silently
-    // re-deploy a producer it merely reads from (issue #751 conflated the two,
-    // which re-deployed — and so mutated the state of — the producer). The DAG
-    // ordering further down still uses the full (strong + weak) set, so when a
-    // producer IS in the deploy set it is correctly ordered before its
-    // GetStackOutput consumer.
-    const inferredStrongCrossStackDeps = inferCrossStackStackDeps(allStacks, {
-      kinds: ['ImportValue'],
-    });
-    const effectiveStrongStackDeps = (stackName: string, deps: readonly string[]): Set<string> => {
-      const union = new Set<string>(deps);
-      for (const producer of inferredStrongCrossStackDeps.get(stackName) ?? []) {
-        union.add(producer);
-      }
-      return union;
-    };
-
-    // Auto-include dependency stacks (CDK CLI compatible behavior)
-    // When deploying StackA that depends on StackB, also deploy StackB first.
+    // Auto-include dependency stacks (CDK CLI compatible behavior): deploying
+    // StackA that depends on StackB also deploys StackB first. Only STRONG
+    // edges count (`includeDependencyStacks`), so a producer read through
+    // `Fn::GetStackOutput` is not re-deployed (issue #751); the DAG ordering
+    // below still uses the full (strong + weak) set. `cdkd diff` shares the
+    // helper so both commands select the same stacks.
     // Use -e / --exclusively to skip this and deploy only the requested stacks.
     if (!options.exclusively) {
-      const targetNames = new Set(targetStacks.map((s) => s.stackName));
-      const allStackMap = new Map(allStacks.map((s) => [s.stackName, s]));
-
-      const addDependencies = (stackName: string): void => {
-        const stack = allStackMap.get(stackName);
-        if (!stack) return;
-        for (const depName of effectiveStrongStackDeps(stackName, stack.dependencyNames)) {
-          if (!targetNames.has(depName)) {
-            const depStack = allStackMap.get(depName);
-            if (depStack) {
-              targetNames.add(depName);
-              targetStacks.push(depStack);
-              logger.debug(
-                `Auto-including dependency stack: ${depName} (required by ${stackName})`
-              );
-              addDependencies(depName); // Recursive
-            }
-          }
-        }
-      };
-
-      for (const stack of [...targetStacks]) {
-        addDependencies(stack.stackName);
-      }
+      targetStacks = includeDependencyStacks(targetStacks, allStacks, (dep, requiredBy) =>
+        logger.debug(`Auto-including dependency stack: ${dep} (required by ${requiredBy})`)
+      );
     }
     const deployedNames = new Set(targetStacks.map((s) => s.stackName));
     const leftOut = allLeftOutStageStacks.filter((s) => !deployedNames.has(s.stackName));
